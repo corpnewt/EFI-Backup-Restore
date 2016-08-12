@@ -75,6 +75,7 @@ function mainMenu () {
     echo
     echo 1. Backup EFI
     echo 2. Restore EFI
+    echo 3. Open Backup Directory
     echo
     echo Q. Quit
     echo
@@ -86,10 +87,18 @@ function mainMenu () {
 		backupEFI
 	elif [[ "$menuChoice" == "2" ]]; then
 		restoreEFI
+    elif [[ "$menuChoice" == "3" ]]; then
+        openBackupDirectory
 	elif [[ "$menuChoice" == "q" ]]; then
 		customQuit
 	fi
 	mainMenu
+
+}
+
+function openBackupDirectory () {
+    
+    open "$backupLocation"
 
 }
 
