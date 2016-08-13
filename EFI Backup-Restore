@@ -103,15 +103,202 @@ function openBackupDirectory () {
 }
 
 function restoreEFI () {
+    resetVars
+    zipList="$( cd "$backupLocation"; ls -1 *.zip )"
+    
+    unset driveArray
+    IFS=$'\n' read -rd '' -a zipArray <<<"$zipList"
+    
+    echo "$zipList"
+    
+    zipTestcount="${#zipArray[@]}"
+    zipCount=0
+    zipIndex=$(( zipTestcount-1 ))
+    
+    #zipIndex=$(( zipCount-1 ))
+
     clear
     echo \#\#\# Restore EFI \#\#\#
     echo
-    echo This functionality is not implemented yet.
-    echo I code slow - so don\'t hold your breath!
+    
+    if [ "$zipTestcount" -lt "1" ]; then
+        echo No backups!
+        echo
+        read -p "Press [enter] to return to the main menu..."
+        mainMenu
+    fi
+    
+    echo Select a backup to restore:
     echo
-    read -p "Press [enter] to return to the main menu..."
-    mainMenu
+    
+    for aZip in "${zipArray[@]}"
+    do
+        (( zipCount++ ))
+        echo "$zipCount". "$aZip"
+    done
+    
+    echo
+    echo
+    read zip
+    
+    #Notice - must have the single brackets or this
+    #won't accurately tell if $drive is a number.
+    if [ "$zip" -eq "$zip" ] 2>/dev/null; then
+        #We have a number - check if it's in the array
+        if [  "$zip" -le "$zipCount" ] && [  "$zip" -gt "0" ]; then
+            zip="${zipArray[ (( $zip-1 )) ]}"
+        else
+            echo Index "$zip" out of range...
+            echo
+            sleep 3
+            mainMenu
+        fi
+    fi
+    
+    #We've got our backup zip
+    clear
+    echo \#\#\# Restore EFI \#\#\#
+    echo
+    echo Select drive to restore to:
+    echo 
+    
+    driveList="$( ls -1 /Volumes/ )"
+    unset driveArray
+    IFS=$'\n' read -rd '' -a driveArray <<<"$driveList"
+    
+    #driveCount="${#driveArray[@]}"
+    driveCount=0
+    driveIndex=0
+    
+    for aDrive in "${driveArray[@]}"
+    do
+        (( driveCount++ ))
+        echo "$driveCount". "$aDrive"
+    done
+    
+    driveIndex=$(( driveCount-1 ))
+    
+    #ls /volumes/
+    echo 
+    echo 
+    read drive
+    
+    if [[ "$drive" == "" ]]; then
+        drive="/"
+    fi
+    
+    #Notice - must have the single brackets or this
+    #won't accurately tell if $drive is a number.
+    if [ "$drive" -eq "$drive" ] 2>/dev/null; then
+        #We have a number - check if it's in the array
+        if [  "$drive" -le "$driveCount" ] && [  "$drive" -gt "0" ]; then
+            drive="${driveArray[ (( $drive-1 )) ]}"
+        else
+            echo Index "$drive" out of range, checking for drive name...
+        fi
+    fi
+    
+    if [[ "$( isDisk "$drive" )" != "0" ]]; then
+        if [[ "$( volumeName "$drive" )" ]]; then
+			# We have a valid disk
+			drive="$( volumeName "$drive" )"
+			#setDisk "$drive"
+		else
+			# No disk available there
+			echo \""$drive"\" is not a valid disk name, identifier
+			echo or mount point.
+			echo 
+			read -p "Press [enter] to return to the main menu..."
+			mainMenu
+		fi
+    fi
+    
+    setDrive "$drive"
+        
+    clear
+    echo \#\#\# Restore EFI \#\#\#
+    echo
+    echo Restore EFI folder to the root of:
+    echo \""$driveName"\"? \(y/n\): 
+    echo
+    read mainMenu
+        
+    if [[ "$mainMenu" == "y" ]]; then
+        restore "$backupLocation" "$zip" "$driveMount/EFI"
+    fi
 
+    hasEFIPartition="$( getEFIIdentifier "$driveIdent" )"
+    
+    if [[ ! "$hasEFIPartition" == "" ]]; then
+    
+        clear
+        echo \#\#\# Backup EFI Partition \#\#\#
+        echo
+        echo \""$driveName"\" has an EFI partition located at:
+        echo \""$hasEFIPartition"\".
+        echo
+        echo Would you like to restore there? \(y/n\):  
+        echo
+        read mainMenu
+        
+        if [[ "$mainMenu" == "y" ]]; then
+            diskutil mount "$hasEFIPartition" &>/dev/null
+            setEFI "$hasEFIPartition"
+            
+            if [[ -d "$efiMount/EFI" ]]; then
+                restore "$backupLocation" "$zip" "$efiMount/EFI"
+            fi
+            
+            echo Unmount EFI partition? \(y/n\):
+            read mainMenu
+        
+            if [[ ! "$mainMenu" == "n" ]]; then
+                diskutil unmount "$efiIdent"
+            fi
+            
+        fi
+        
+    fi
+    
+    echo
+    echo Done.
+    echo
+    sleep 3
+    mainMenu
+    
+    
+    restore "$backupLocation" "$zip" "none"
+    
+}
+
+function restore () {
+
+    local __source="$1"
+    local __name="$2"
+    local __dest="$3"
+    
+    local __tempFolder=`mktemp -d -t 'efi-backup-restore'`
+    
+    cd "$__source"
+    unzip "$__name" -d "$__tempFolder"
+    cd "$DIR"
+    
+    if [ "$?" -ne 0 ]; then
+        echo Failed to unzip backup - Error Code: "$?"
+    else
+    
+        if [[ -d "$__tempFolder/EFI" ]]; then
+            #Valid EFI folder
+            #Remove the destination folder
+            if [[ -d "$__dest" ]]; then
+                rm -Rf "$__dest"
+            fi
+            cp -R "$__tempFolder/EFI" "$__dest"
+        else
+            echo Backup not valid - needs to unzip to EFI folder...
+        fi
+    fi
+    rm -R "$__tempFolder"
 }
 
 function backupEFI () {
@@ -151,7 +338,7 @@ function backupEFI () {
     #won't accurately tell if $drive is a number.
     if [ "$drive" -eq "$drive" ] 2>/dev/null; then
         #We have a number - check if it's in the array
-        if [  "$drive" -lt "$driveIndex" ] && [  "$drive" -gt "0" ]; then
+        if [  "$drive" -le "$driveCount" ] && [  "$drive" -gt "0" ]; then
             drive="${driveArray[ (( $drive-1 )) ]}"
         else
             echo Index "$drive" out of range, checking for drive name...
@@ -266,6 +453,10 @@ function backup () {
     cd "$__sourceParent"
     
     zip -r "$backupLocation/$__name$__timeStamp.zip" "$__sourceName"
+    
+    if [ "$?" -ne 0 ]; then
+        echo Failed to create backup - Error Code: "$?"
+    fi
     
     cd "$DIR"
 }
