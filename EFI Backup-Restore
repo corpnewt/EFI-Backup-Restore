@@ -178,7 +178,7 @@ function restoreEFI () {
     echo Select drive to restore to:
     echo 
     
-    driveList="$( ls -1 /Volumes/ )"
+    driveList="$( cd /Volumes/; ls -1 | grep "^[^.]" )"
     unset driveArray
     IFS=$'\n' read -rd '' -a driveArray <<<"$driveList"
     
@@ -339,7 +339,7 @@ function backupEFI () {
     echo Select drive containing EFI to backup:
     echo 
     
-    driveList="$( ls -1 /Volumes/ )"
+    driveList="$( cd /Volumes/; ls -1 | grep "^[^.]" )"
     unset driveArray
     IFS=$'\n' read -rd '' -a driveArray <<<"$driveList"
     
