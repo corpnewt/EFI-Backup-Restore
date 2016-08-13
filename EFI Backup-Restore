@@ -136,7 +136,7 @@ function backupEFI () {
         echo "$driveCount". "$aDrive"
     done
     
-    driveIndex=( driveCount-1 )
+    driveIndex=$(( driveCount-1 ))
     
     #ls /volumes/
     echo 
@@ -151,8 +151,10 @@ function backupEFI () {
     #won't accurately tell if $drive is a number.
     if [ "$drive" -eq "$drive" ] 2>/dev/null; then
         #We have a number - check if it's in the array
-        if [[  "$drive" < "$driveIndex" ]] && [[  "$drive" > "0" ]]; then
+        if [  "$drive" -lt "$driveIndex" ] && [  "$drive" -gt "0" ]; then
             drive="${driveArray[ (( $drive-1 )) ]}"
+        else
+            echo Index "$drive" out of range, checking for drive name...
         fi
     fi
     
@@ -231,7 +233,7 @@ function backupEFI () {
     echo
     echo Done.
     echo
-    sleep 5
+    sleep 3
     mainMenu
 
 }
