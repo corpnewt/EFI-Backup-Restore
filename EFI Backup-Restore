@@ -27,6 +27,18 @@ efiIdent=""
 efiDisk=""
 efiPart=""
 
+function checkRoot () {
+	if [[ "$(whoami)" != "root" ]]; then
+		clear
+		echo This script requires root privileges.
+		echo Please enter your admin password to continue.
+		echo 
+		sudo "$0"
+		exit $?
+	fi
+
+}
+
 function resetVars () {
     driveName=""
     driveMount=""
@@ -141,6 +153,10 @@ function restoreEFI () {
     echo
     read zip
     
+    if [[ "$zip" == "" ]]; then
+        restoreEFI
+    fi
+    
     #Notice - must have the single brackets or this
     #won't accurately tell if $drive is a number.
     if [ "$zip" -eq "$zip" ] 2>/dev/null; then
@@ -184,7 +200,8 @@ function restoreEFI () {
     read drive
     
     if [[ "$drive" == "" ]]; then
-        drive="/"
+        #drive="/"
+        restoreEFI
     fi
     
     #Notice - must have the single brackets or this
@@ -222,7 +239,11 @@ function restoreEFI () {
     echo \""$driveName"\"? \(y/n\): 
     echo
     read mainMenu
-        
+      
+    if [[ "$mainMenu" == "" ]]; then 
+        mainMenu="y"
+    fi  
+      
     if [[ "$mainMenu" == "y" ]]; then
         restore "$backupLocation" "$zip" "$driveMount/EFI"
     fi
@@ -241,13 +262,17 @@ function restoreEFI () {
         echo
         read mainMenu
         
+        if [[ "$mainMenu" == "" ]]; then 
+            mainMenu="y"
+        fi
+        
         if [[ "$mainMenu" == "y" ]]; then
             diskutil mount "$hasEFIPartition" &>/dev/null
             setEFI "$hasEFIPartition"
             
-            if [[ -d "$efiMount/EFI" ]]; then
-                restore "$backupLocation" "$zip" "$efiMount/EFI"
-            fi
+            #if [[ -d "$efiMount/EFI" ]]; then
+            restore "$backupLocation" "$zip" "$efiMount/EFI"
+            #fi
             
             echo Unmount EFI partition? \(y/n\):
             read mainMenu
@@ -266,9 +291,6 @@ function restoreEFI () {
     sleep 3
     mainMenu
     
-    
-    restore "$backupLocation" "$zip" "none"
-    
 }
 
 function restore () {
@@ -278,6 +300,14 @@ function restore () {
     local __dest="$3"
     
     local __tempFolder=`mktemp -d -t 'efi-backup-restore'`
+    
+    
+    clear
+    echo \#\#\# Restoring \#\#\#
+    echo
+    echo Restoring \""$__name"\" to:
+    echo \""$__dest"\"...
+    
     
     cd "$__source"
     unzip "$__name" -d "$__tempFolder"
@@ -331,7 +361,8 @@ function backupEFI () {
     read drive
     
     if [[ "$drive" == "" ]]; then
-        drive="/"
+        #drive="/"
+        backupEFI
     fi
     
     #Notice - must have the single brackets or this
@@ -378,6 +409,10 @@ function backupEFI () {
         echo
         read mainMenu
         
+        if [[ "$mainMenu" == "" ]]; then 
+            mainMenu="y"
+        fi
+        
         if [[ "$mainMenu" == "y" ]]; then
             backup "$efiFolder" "$driveName-EFIF-"
         fi
@@ -397,6 +432,10 @@ function backupEFI () {
         echo Would you like to back that up? \(y/n\):  
         echo
         read mainMenu
+        
+        if [[ "$mainMenu" == "" ]]; then 
+            mainMenu="y"
+        fi
         
         if [[ "$mainMenu" == "y" ]]; then
             diskutil mount "$hasEFIPartition" &>/dev/null
@@ -746,4 +785,5 @@ function diskInfo () {
 ###             End Disk Functions              ###
 ###################################################
 
+checkRoot
 displayWarning
