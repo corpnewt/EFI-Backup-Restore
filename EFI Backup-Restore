@@ -121,13 +121,39 @@ function backupEFI () {
     echo
     echo Select drive containing EFI to backup:
     echo 
-    ls /volumes/
+    
+    driveList="$( ls -1 /Volumes/ )"
+    unset driveArray
+    IFS=$'\n' read -rd '' -a driveArray <<<"$driveList"
+    
+    #driveCount="${#driveArray[@]}"
+    driveCount=0
+    driveIndex=0
+    
+    for aDrive in "${driveArray[@]}"
+    do
+        (( driveCount++ ))
+        echo "$driveCount". "$aDrive"
+    done
+    
+    driveIndex=( driveCount-1 )
+    
+    #ls /volumes/
     echo 
     echo 
     read drive
     
     if [[ "$drive" == "" ]]; then
         drive="/"
+    fi
+    
+    #Notice - must have the single brackets or this
+    #won't accurately tell if $drive is a number.
+    if [ "$drive" -eq "$drive" ] 2>/dev/null; then
+        #We have a number - check if it's in the array
+        if [[  "$drive" < "$driveIndex" ]] && [[  "$drive" > "0" ]]; then
+            drive="${driveArray[ (( $drive-1 )) ]}"
+        fi
     fi
     
     if [[ "$( isDisk "$drive" )" != "0" ]]; then
