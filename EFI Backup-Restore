@@ -27,6 +27,18 @@ efiIdent=""
 efiDisk=""
 efiPart=""
 
+driveSourceName=""
+driveSourceMount=""
+driveSourceIdent=""
+driveSourceDisk=""
+driveSourcePart=""
+
+efiSourceName=""
+efiSourceMount=""
+efiSourceIdent=""
+efiSourceDisk=""
+efiSourcePart=""
+
 function checkRoot () {
 	if [[ "$(whoami)" != "root" ]]; then
 		clear
@@ -53,6 +65,18 @@ function resetVars () {
     efiIdent=""
     efiDisk=""
     efiPart=""
+    
+    driveSourceName=""
+    driveSourceMount=""
+    driveSourceIdent=""
+    driveSourceDisk=""
+    driveSourcePart=""
+    
+    efiSourceName=""
+    efiSourceMount=""
+    efiSourceIdent=""
+    efiSourceDisk=""
+    efiSourcePart=""
 }
 
 function setDrive () {
@@ -79,6 +103,30 @@ function setEFI () {
     fi
 }
 
+function setDriveSource () {
+	driveSourceName="$( getDiskName "$1" )"
+	driveSourceMount="$( getDiskMountPoint "$1" )"
+	driveSourceIdent="$( getDiskIdentifier "$1" )"
+	driveSourceDisk="$( getDiskNumber "$1" )"
+	driveSourcePart="$( getPartitionNumber "$1" )"
+    
+    if [[ "$driveSourceName" == "" ]]; then
+        driveSourceName="Untitled"
+    fi
+}
+
+function setEfiSource () {
+	efiSourceName="$( getDiskName "$1" )"
+	efiSourceMount="$( getDiskMountPoint "$1" )"
+	efiSourceIdent="$( getDiskIdentifier "$1" )"
+	efiSourceDisk="$( getDiskNumber "$1" )"
+	efiSourcePart="$( getPartitionNumber "$1" )"
+    
+    if [[ "$efiSourceName" == "" ]]; then
+        efiSourceName="Untitled"
+    fi
+}
+
 
 function mainMenu () {
     resetVars
@@ -87,7 +135,8 @@ function mainMenu () {
     echo
     echo 1. Backup EFI
     echo 2. Restore EFI
-    echo 3. Open Backup Directory
+    echo 3. EFI to EFI copy
+    echo 4. Open Backup Directory
     echo
     echo Q. Quit
     echo
@@ -100,6 +149,8 @@ function mainMenu () {
 	elif [[ "$menuChoice" == "2" ]]; then
 		restoreEFI
     elif [[ "$menuChoice" == "3" ]]; then
+        efiToEFI
+    elif [[ "$menuChoice" == "4" ]]; then
         openBackupDirectory
 	elif [[ "$menuChoice" == "q" ]]; then
 		customQuit
@@ -111,6 +162,320 @@ function mainMenu () {
 function openBackupDirectory () {
     
     open "$backupLocation"
+
+}
+
+function efiToEFI () {
+    sourceFolder=""
+    sourceIdent=""
+    
+    destFolder=""
+    destIdent=""
+    
+    resetVars
+    clear
+    echo \#\#\# EFI to EFI Copy \#\#\#
+    echo
+    echo Select drive containing EFI source:
+    echo 
+    
+    driveList="$( cd /Volumes/; ls -1 | grep "^[^.]" )"
+    unset driveArray
+    IFS=$'\n' read -rd '' -a driveArray <<<"$driveList"
+    
+    #driveCount="${#driveArray[@]}"
+    driveCount=0
+    driveIndex=0
+    
+    for aDrive in "${driveArray[@]}"
+    do
+        (( driveCount++ ))
+        echo "$driveCount". "$aDrive"
+    done
+    
+    driveIndex=$(( driveCount-1 ))
+    
+    #ls /volumes/
+    echo 
+    echo 
+    read drive
+    
+    if [[ "$drive" == "" ]]; then
+        #drive="/"
+        efiToEFI
+    fi
+    
+    #Notice - must have the single brackets or this
+    #won't accurately tell if $drive is a number.
+    if [ "$drive" -eq "$drive" ] 2>/dev/null; then
+        #We have a number - check if it's in the array
+        if [  "$drive" -le "$driveCount" ] && [  "$drive" -gt "0" ]; then
+            drive="${driveArray[ (( $drive-1 )) ]}"
+        else
+            echo Index "$drive" out of range, checking for drive name...
+        fi
+    fi
+    
+    if [[ "$( isDisk "$drive" )" != "0" ]]; then
+        if [[ "$( volumeName "$drive" )" ]]; then
+			# We have a valid disk
+			drive="$( volumeName "$drive" )"
+			#setDisk "$drive"
+		else
+			# No disk available there
+			echo \""$drive"\" is not a valid disk name, identifier
+			echo or mount point.
+			echo 
+			read -p "Press [enter] to return to the main menu..."
+			mainMenu
+		fi
+    fi
+    setDriveSource "$drive"
+    
+    hasEFIFolder="$( checkEFIFolder "$driveSourceMount" )"
+    
+    if [[ "$hasEFIFolder" == "1" ]]; then
+        #echo "$driveName" has an EFI folder.
+        efiFolder="$driveSourceMount/EFI"
+        
+        clear
+        echo \#\#\# EFI to EFI Copy \#\#\#
+        echo
+        echo \""$driveSourceName"\" has an EFI folder located at:
+        echo \""$efiFolder"\".
+        echo
+        echo Would you like to use that as your source? \(y/n\):
+        echo
+        echo If you choose not to, this script will attempt to check
+        echo for an EFI partition on \""$driveSourceName"\".
+        echo
+        read mainMenu
+        
+        if [[ "$mainMenu" == "" ]]; then 
+            mainMenu="y"
+        fi
+        
+        if [[ "$mainMenu" == "y" ]]; then
+            sourceFolder="$efiFolder"
+        fi
+        
+    fi
+    
+    if [[ "$sourceFolder" == "" ]]; then
+        hasEFIPartition="$( getEFIIdentifier "$driveSourceIdent" )"
+    
+        if [[ ! "$hasEFIPartition" == "" ]]; then
+    
+            clear
+            echo \#\#\# EFI to EFI Copy \#\#\#
+            echo
+            echo \""$driveSourceName"\" has an EFI partition located at:
+            echo \""$hasEFIPartition"\".
+            echo
+            echo Would you like to use that as your source? \(y/n\):
+            echo
+            read mainMenu
+        
+            if [[ "$mainMenu" == "" ]]; then 
+                mainMenu="y"
+            fi
+        
+            if [[ "$mainMenu" == "y" ]]; then
+                diskutil mount "$hasEFIPartition" &>/dev/null
+                setEfiSource "$hasEFIPartition"
+                sourceIdent="$efiSourceIdent"
+            
+                if [[ -d "$efiSourceMount/EFI" ]]; then
+                    sourceFolder="$efiSourceMount/EFI"
+                fi
+            fi
+        fi
+    fi
+    
+    if [[ "$sourceFolder" == "" ]]; then
+        
+        if [[ ! "$sourceIdent" == "" ]]; then
+            # EFI part was mounted - unmount
+            diskutil unmount "$sourceIdent"
+        fi
+        
+        clear
+        echo \#\#\# EFI to EFI Copy \#\#\#
+        echo
+        echo No EFI selected.  Returning to the main menu...
+        echo
+        sleep 3
+        mainMenu
+    
+    fi
+    
+    
+    #By this point - we have a source, let's get a target.
+    
+    
+    clear
+    echo \#\#\# EFI to EFI Copy \#\#\#
+    echo
+    echo Select destination drive:
+    echo 
+    
+    driveList="$( cd /Volumes/; ls -1 | grep "^[^.]" )"
+    unset driveArray
+    IFS=$'\n' read -rd '' -a driveArray <<<"$driveList"
+    
+    #driveCount="${#driveArray[@]}"
+    driveCount=0
+    driveIndex=0
+    
+    for aDrive in "${driveArray[@]}"
+    do
+        (( driveCount++ ))
+        echo "$driveCount". "$aDrive"
+    done
+    
+    driveIndex=$(( driveCount-1 ))
+    
+    #ls /volumes/
+    echo 
+    echo 
+    read drive
+    
+    if [[ "$drive" == "" ]]; then
+        #drive="/"
+        efiToEFI
+    fi
+    
+    #Notice - must have the single brackets or this
+    #won't accurately tell if $drive is a number.
+    if [ "$drive" -eq "$drive" ] 2>/dev/null; then
+        #We have a number - check if it's in the array
+        if [  "$drive" -le "$driveCount" ] && [  "$drive" -gt "0" ]; then
+            drive="${driveArray[ (( $drive-1 )) ]}"
+        else
+            echo Index "$drive" out of range, checking for drive name...
+        fi
+    fi
+    
+    if [[ "$( isDisk "$drive" )" != "0" ]]; then
+        if [[ "$( volumeName "$drive" )" ]]; then
+			# We have a valid disk
+			drive="$( volumeName "$drive" )"
+			#setDisk "$drive"
+		else
+			# No disk available there
+			echo \""$drive"\" is not a valid disk name, identifier
+			echo or mount point.
+			echo 
+			read -p "Press [enter] to return to the main menu..."
+			mainMenu
+		fi
+    fi
+    setDrive "$drive"
+    
+    ########################
+    
+    efiFolder="$driveMount"
+        
+    clear
+    echo \#\#\# EFI to EFI Copy \#\#\#
+    echo
+    echo Restore EFI folder to the root of:
+    echo \""$driveName"\"? \(y/n\): 
+    echo
+    read mainMenu
+        
+    if [[ "$mainMenu" == "" ]]; then 
+        mainMenu="y"
+    fi
+        
+    if [[ "$mainMenu" == "y" ]]; then
+        #Copy EFI to EFI command here
+        copyEFI "$sourceFolder" "$efiFolder" "$driveName"
+    fi
+    
+    if [[ ! "$sourceFolder" == "" ]]; then
+        hasEFIPartition="$( getEFIIdentifier "$driveIdent" )"
+    
+        if [[ ! "$hasEFIPartition" == "" ]]; then
+    
+            clear
+            echo \#\#\# EFI to EFI Copy \#\#\#
+            echo
+            echo \""$driveName"\" has an EFI partition located at:
+            echo \""$hasEFIPartition"\".
+            echo
+            echo Would you like to use that as your destination? \(y/n\):
+            echo
+            read mainMenu
+        
+            if [[ "$mainMenu" == "" ]]; then 
+                mainMenu="y"
+            fi
+        
+            if [[ "$mainMenu" == "y" ]]; then
+                diskutil mount "$hasEFIPartition" &>/dev/null
+                setEFI "$hasEFIPartition"
+                destIdent="$efiIdent"
+            
+                efiFolder="$efiMount"
+                copyEFI "$sourceFolder" "$efiFolder" "$driveName"
+            fi
+        fi
+    fi
+    
+    ########################
+    
+    if [[ ! "$efiMount" == "" ]] || [[ ! "$efiSourceMount" == "" ]]; then
+        clear
+        echo \#\#\# EFI to EFI Copy \#\#\#
+        echo
+        echo Unmount all used EFI partitions? \(y/n\):
+        echo
+        read mainMenu
+        
+        if [[ "$mainMenu" == "" ]]; then 
+            mainMenu="y"
+        fi
+        
+        if [[ "$mainMenu" == "y" ]]; then
+            if [[ ! "$efiMount" == "" ]]; then
+                diskutil unmount "$efiIdent"
+            fi
+            if [[ ! "$efiSourceMount" == "" ]]; then
+                diskutil unmount "$efiSourceMount"
+            fi
+        fi
+    fi
+    
+    echo
+    echo Done.
+    echo
+    sleep 3
+    mainMenu
+
+}
+
+function copyEFI () {
+    
+    local __source="$1"
+    local __dest="$2" 
+    local __name="$3"
+    
+    clear
+    echo \#\#\# Copying EFI \#\#\#
+    echo
+    echo Copying EFI from \""$__name"\" to:
+    echo \""$__dest"\"...
+    
+    if [[ -d "$__dest/EFI" ]]; then
+        rm -Rf "$__dest/EFI"
+    fi
+    
+    cp -R "$__source" "$__dest"
+    
+    if [ "$?" -ne 0 ]; then
+        echo Failed to copy EFI - Error Code: "$?"
+    fi
 
 }
 
