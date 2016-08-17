@@ -45,7 +45,7 @@ function checkRoot () {
 		echo This script requires root privileges.
 		echo Please enter your admin password to continue.
 		echo 
-		sudo "$0"
+		sudo "$0" "$1"
 		exit $?
 	fi
 
@@ -921,6 +921,7 @@ function displayWarning () {
 	echo 
 	read -p "To REFUSE, close this script."
     makeBackupLocation
+    checkRoot "MainMenu"
 	mainMenu
 }
 
@@ -1150,5 +1151,8 @@ function diskInfo () {
 ###             End Disk Functions              ###
 ###################################################
 
-checkRoot
+if [[ "$1" == "MainMenu" ]]; then
+    mainMenu
+fi
+
 displayWarning
