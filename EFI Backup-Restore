@@ -39,6 +39,12 @@ efiSourceIdent=""
 efiSourceDisk=""
 efiSourcePart=""
 
+function expandPath () {
+    
+    echo "${1/#\~/$HOME}"
+
+}
+
 function checkRoot () {
 	if [[ "$(whoami)" != "root" ]]; then
 		clear
@@ -880,7 +886,7 @@ function getTimestamp () {
 
 function makeBackupLocation () {
     #Expand tilde in backupLocation if relative
-    backupLocation="${backupLocation/#\~/$HOME}"
+    #backupLocation="${backupLocation/#\~/$HOME}"
         
     if [[ ! -e "$backupLocation" ]]; then
         mkdir "$backupLocation"
@@ -1150,6 +1156,8 @@ function diskInfo () {
 ###################################################
 ###             End Disk Functions              ###
 ###################################################
+
+backupLocation="$( expandPath "$backupLocation" )"
 
 if [[ "$1" == "MainMenu" ]]; then
     mainMenu
