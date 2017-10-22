@@ -1052,13 +1052,22 @@ function getPartitionType () {
 }
 
 function getEFIIdentifier () {
-	local __disk=$1
-	local __diskName="$( getDiskName "$__disk" )"
-	local __diskNum="$( getDiskNumber "$__disk" )"
+	local __disk="$1"
 	# If variable is empty, set it to "/"
 	if [[ "$__disk" == "" ]]; then
 		__disk="/"
 	fi
+
+	# Check if we are on an APFS volume
+	local __tempNum="$( getDiskNumber "$__disk" )"
+	local __apfsDisk="$( getPhysicalStore "disk$__tempNum" )"
+	if [[ "$__apfsDisk" != "" ]]; then
+		__disk="$__apfsDisk"
+	fi
+
+	local __diskName="$( getDiskName "$__disk" )"
+	local __diskNum="$( getDiskNumber "$__disk" )"
+
 	# Output the "Device Identifier" for the EFI partition of __disk
 	endOfDisk="0"
 	i=1
@@ -1079,6 +1088,25 @@ function getEFIIdentifier () {
 		fi
 		i="$( expr $i + 1 )"
 	done
+}
+
+function getPhysicalStore () {
+	# Helper function to get the physical disk for apfs volume
+	local __disk="$1"
+	local __diskName="$( getDiskName "$__disk" )"
+	local __diskNum="$( getDiskNumber "$__disk" )"
+	# If variable is empty, set it to "/"
+	if [[ "$__disk" == "" ]]; then
+		__disk="/"
+	fi
+	# Output the physical store disk, if any
+	__tempDisk="$( diskutil apfs list "$__disk" 2>/dev/null | grep 'APFS Physical Store Disk' | cut -d : -f 2 | sed 's/^ *//g' | sed 's/ *$//g' )"
+	__finalDisk=""
+	if [[ "$__tempDisk" != "" ]]; then
+		__tempDiskNumber="$( getDiskNumber "$__tempDisk" )"
+		__finalDisk="disk$__tempDiskNumber"
+	fi
+	echo $__finalDisk
 }
 
 function mountEFI () {
