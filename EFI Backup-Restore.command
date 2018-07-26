@@ -524,7 +524,7 @@ class EFI:
         # At this point - we should have 2 mounted EFIs
         s_m = self.d.get_mount_point(efi_source)
         d_m = self.d.get_mount_point(efi_dest)
-        s_dirs = [x for x in os.listdir(os.path.join(s_m, "EFI")) if not x.startswith(".")]
+        s_dirs = [x for x in os.listdir(os.path.join(s_m, "EFI")) if not x.startswith(".") and os.path.isdir(os.path.join(s_m, "EFI", x))]
         if not len(s_dirs):
             self.u.grab("Source EFI is empty!", timeout=5)
             if not d_mounted:
