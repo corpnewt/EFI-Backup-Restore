@@ -7,12 +7,10 @@ class EFI:
     def __init__(self, **kwargs):
         self.r  = run.Run()
         self.d  = disk.Disk()
-        self.dl = downloader.Downloader()
         self.u  = utils.Utils("EFI Backup-Restore")
-        self.re = reveal.Reveal()
+        self.boot_manager = bdmesg.get_bootloader_uuid()
         # Get the tools we need
         self.script_folder = "Scripts"
-        self.update_url = "https://raw.githubusercontent.com/corpnewt/EFI-Backup-Restore/master/EFI-Backup-Restore.command"
         
         self.settings_file = kwargs.get("settings", None)
         cwd = os.getcwd()
@@ -33,47 +31,6 @@ class EFI:
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
 
-    def check_update(self):
-        # Checks against self.update_url to see if we need to update
-        self.u.head("Checking for Updates")
-        print(" ")
-        with open(os.path.realpath(__file__), "r") as f:
-            # Our version should always be the second line
-            version = get_version(f.read())
-        print(version)
-        try:
-            new_text = _get_string(url)
-            new_version = get_version(new_text)
-        except:
-            # Not valid json data
-            print("Error checking for updates (network issue)")
-            return
-
-        if version == new_version:
-            # The same - return
-            print("v{} is already current.".format(version))
-            return
-        # Split the version number
-        try:
-            v = version.split(".")
-            cv = new_version.split(".")
-        except:
-            # not formatted right - bail
-            print("Error checking for updates (version string malformed)")
-            return
-
-        if not need_update(cv, v):
-            print("v{} is already current.".format(version))
-            return
-
-        # Update
-        with open(os.path.realpath(__file__), "w") as f:
-            f.write(new_text)
-
-        # chmod +x, then restart
-        run_command(["chmod", "+x", __file__])
-        os.execv(__file__, sys.argv)
-
     def flush_settings(self):
         if self.settings_file:
             cwd = os.getcwd()
@@ -82,15 +39,13 @@ class EFI:
             os.chdir(cwd)
 
     def default_disk(self):
-        self.d.update()
-        clover = bdmesg.get_clover_uuid()
         self.u.resize(80, 24)
         self.u.head("Select Default Disk")
         print(" ")
         print("1. None")
         print("2. Boot Disk")
-        if clover:
-            print("3. Booted Clover")
+        if self.boot_manager:
+            print("3. Booted Clover/OC")
         print(" ")
         print("M. Main Menu")
         print("Q. Quit")
@@ -113,129 +68,106 @@ class EFI:
             self.u.custom_quit()
         self.default_disk()
 
-    def get_efi(self, header = None):
-        self.d.update()
-        clover = bdmesg.get_clover_uuid()
-        i = 0
-        disk_string = ""
-        if not self.full:
-            clover_disk = self.d.get_parent(clover)
-            mounts = self.d.get_mounted_volume_dicts()
-            for d in mounts:
-                i += 1
-                disk_string += "{}. {} ({})".format(i, d["name"], d["identifier"])
-                if self.d.get_parent(d["identifier"]) == clover_disk:
-                # if d["disk_uuid"] == clover:
-                    disk_string += " *"
-                disk_string += "\n"
-        else:
-            mounts = self.d.get_disks_and_partitions_dict()
-            disks = mounts.keys()
-            for d in disks:
-                i += 1
-                disk_string+= "{}. {}:\n".format(i, d)
-                parts = mounts[d]["partitions"]
-                part_list = []
-                for p in parts:
-                    p_text = "        - {} ({})".format(p["name"], p["identifier"])
-                    if p["disk_uuid"] == clover:
-                        # Got Clover
-                        p_text += " *"
-                    part_list.append(p_text)
-                if len(part_list):
-                    disk_string += "\n".join(part_list) + "\n"
-        height = len(disk_string.split("\n"))+16
-        if height < 24:
-            height = 24
-        self.u.resize(80, height)
-        if header:
-            self.u.head(header)
-        else:
-            self.u.head()
-        print(" ")
-        print(disk_string)
-        if not self.full:
-            print("S. Switch to Full Output")
-        else:
-            print("S. Switch to Slim Output")
-        lay = self.settings.get("full_layout", False)
-        l_str = "Slim"
-        if lay:
-            l_str = "Full"
-        print("L. Set As Default Layout (Current: {})".format(l_str))
-        print("B. Mount the Boot Drive's EFI")
-        if clover:
-            print("C. Mount the Booted Clover's EFI")
-        print("")
-
-        dd = self.settings.get("default_disk", None)
-        if dd == "clover":
-            dd = clover
-        elif dd == "boot":
-            dd = "/"
-        di = self.d.get_identifier(dd)
-        if di:
-            print("D. Pick Default Disk ({} - {})".format(self.d.get_volume_name(di), di))
-        else:
-            print("D. Pick Default Disk (None Set)")
-        
-        am = self.settings.get("after_mount", None)
-        if not am:
-            am = "Return to Menu"
-        print("M. After Mounting: "+am)
-        print("Q. Quit")
-        print(" ")
-        print("(* denotes the booted Clover)")
-
-        menu = self.u.grab("Pick the drive containing your EFI:  ")
-        if not len(menu):
-            if not di:
-                return self.get_efi()
-            return self.d.get_efi(di)
-        menu = menu.lower()
-        if menu == "q":
-            self.u.custom_quit()
-        elif menu == "s":
-            self.full ^= True
-            return self.get_efi()
-        elif menu == "b":
-            return self.d.get_efi("/")
-        elif menu == "c" and clover:
-            return self.d.get_efi(clover)
-        elif menu == "m":
-            return
-        elif menu == "d":
-            self.default_disk()
-            return self.get_efi()
-        elif menu == "l":
-            self.settings["full_layout"] = self.full
-            self.flush_settings()
-            return self.get_efi()
-        try:
-            disk_iden = int(menu)
-            if not (disk_iden > 0 and disk_iden <= len(mounts)):
-                # out of range!
-                self.u.grab("Invalid disk!", timeout=3)
-                return self.get_efi()
-            if type(mounts) is list:
-                # We have the small list
-                disk = mounts[disk_iden-1]["identifier"]
+    def get_efi(self,header=None,allow_main=True):
+        while True:
+            self.d.update()
+            pad = 4
+            disk_string = "\n"
+            if not self.settings.get("full_layout"):
+                boot_disk = self.d.get_parent(self.boot_manager)
+                mounts = self.d.get_mounted_volume_dicts()
+                for i,d in enumerate(mounts,start=1):
+                    disk_string += "{}. {} ({})".format(str(i).rjust(2), d["name"], d["identifier"])
+                    if boot_disk and self.d.get_parent(d["identifier"]) == boot_disk:
+                        disk_string += " *"
+                    disk_string += "\n"
             else:
-                # We have the dict
-                disk = mounts.keys()[disk_iden-1]
-        except:
-            disk = menu
-        iden = self.d.get_identifier(disk)
-        name = self.d.get_volume_name(disk)
-        if not iden:
-            self.u.grab("Invalid disk!", timeout=3)
-            return self.get_efi()
-        # Valid disk!
-        return self.d.get_efi(iden)
+                mounts = self.d.get_disks_and_partitions_dict()
+                disks = list(mounts)
+                for i,d in enumerate(disks,start=1):
+                    disk_string+= "{}. {}:\n".format(str(i).rjust(2),d)
+                    if mounts[d].get("scheme"):
+                        disk_string += "      {}\n".format(mounts[d]["scheme"])
+                    if mounts[d].get("physical_stores"):
+                        disk_string += "      Physical Store{} on {}\n".format(
+                            "" if len(mounts[d]["physical_stores"])==1 else "s",
+                            ", ".join(mounts[d]["physical_stores"])
+                        )
+                    parts = mounts[d]["partitions"]
+                    part_list = []
+                    for p in parts:
+                        name = "Container for {}".format(p["container_for"]) if "container_for" in p else p["name"]
+                        p_text = "        - {} ({})".format(name, p["identifier"])
+                        if self.boot_manager and p["disk_uuid"] == self.boot_manager:
+                            # Got boot manager
+                            p_text += " *"
+                        part_list.append(p_text)
+                    if len(part_list):
+                        disk_string += "\n".join(part_list) + "\n"
+            disk_string += "\nS. Switch to {} Output\n".format("Slim" if self.settings.get("full_layout") else "Full")
+            disk_string += "B. Select the Boot Drive's EFI\n"
+            if self.boot_manager:
+                disk_string += "C. Select the Booted EFI (Clover/OC)\n"
+            dd = self.settings.get("default_disk")
+            dd = self.boot_manager if dd=="clover" else "/" if dd=="boot" else dd
+            di = self.d.get_identifier(dd)
+            disk_string += "D. Pick Default Disk ({})\n".format(
+                "{} - {}".format(self.d.get_volume_name(di),di) if di else "None Set"
+            )
+            disk_string += ("\nM. Main" if allow_main else "") + "\nQ. Quit\n"
+            if self.boot_manager:
+                disk_string += "\n(* denotes the booted EFI (Clover/OC)"
+            height = max(len(disk_string.split("\n"))+pad,24)
+            if self.settings.get("resize_window",True): self.u.resize(80,height)
+            self.u.head(header)
+            print(disk_string)
+            menu = self.u.grab("Pick the drive containing your EFI:  ")
+            if not len(menu):
+                continue
+            if menu.lower() == "q":
+                if self.settings.get("resize_window",True): self.u.resize(80,24)
+                self.u.custom_quit()
+            elif allow_main and menu.lower() == "m":
+                if self.settings.get("resize_window",True): self.u.resize(80,24)
+                return
+            elif menu.lower() == "s":
+                self.settings["full_layout"] = not self.settings.get("full_layout")
+                continue
+            elif menu.lower() == "b":
+                disk = "/"
+                iden = self.d.get_efi("/")
+            elif menu.lower() == "c" and self.boot_manager:
+                disk = self.boot_manager
+                iden = self.d.get_efi(self.boot_manager)
+            elif menu.lower() == "d":
+                self.default_disk()
+                continue
+            else:
+                try: disk = mounts[int(menu)-1]["identifier"] if isinstance(mounts,list) else list(mounts)[int(menu)-1]
+                except: disk = menu
+            if self.settings.get("resize_window",True): self.u.resize(80,24)
+            iden = self.d.get_identifier(disk)
+            if not iden:
+                self.u.head("Invalid Disk")
+                print("")
+                print("'{}' is not a valid disk!".format(disk))
+                print("")
+                self.u.grab("Returning in 3 seconds...", timeout=3)
+                continue
+            # Valid disk!
+            efi = self.d.get_efi(iden)
+            if not efi:
+                self.u.head("No EFI Partition")
+                print("")
+                print("There is no EFI partition associated with {}!".format(iden))
+                print("")
+                self.u.grab("Returning in 3 seconds...", timeout=3)
+                continue
+            return efi
 
     def select_folders(self, dirs, title = "Select Folders"):
         # Iterate through the volumes inside the EFI folder and decide what to keep - or just keep all
-        dirs.sort()
+        dirs.sort(key=lambda x:x.get("name",""))
         while True:
             num = 0
             out = ""
