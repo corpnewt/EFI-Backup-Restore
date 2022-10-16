@@ -463,6 +463,8 @@ class EFI:
         print("1. Backup EFI")
         print("2. Restore EFI")
         print("3. EFI to EFI Copy")
+        if os.path.exists(self.save_path):
+            print("4. Open Save Path")
         print("")
         print("Q. Quit")
         print("")
@@ -479,6 +481,8 @@ class EFI:
             self.restore_efi()
         elif menu == "3":
             self.efi_to_efi()
+        elif menu == "4" and os.path.exists(self.save_path):
+            self.r.run({"args":["open",self.save_path]})
         self.main()
 
     def quiet_mount(self, disk_list):
