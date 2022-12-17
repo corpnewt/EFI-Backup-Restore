@@ -167,10 +167,8 @@ class EFI:
                 continue
             elif menu.lower() == "b":
                 disk = "/"
-                iden = self.d.get_efi("/")
             elif menu.lower() == "c" and self.boot_manager:
                 disk = self.boot_manager
-                iden = self.d.get_efi(self.boot_manager)
             elif menu.lower() == "d":
                 self.default_disk()
                 continue
